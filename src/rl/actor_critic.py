@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+import os
+import time
 from dataclasses import dataclass
 
 import torch
@@ -142,15 +145,21 @@ class ActorCritic:
                 episodeNumber += 1
 
 
-    def plot_stats(self):
+    def plot_stats(self, save_directory=None, suffix=None):
         episodeStats = pd.DataFrame(self.episodeStatistics)
         timestepStats = pd.DataFrame(self.timestepStatistics)
+
+        suffix = f"_{int(time.time())}" if suffix is None else suffix
 
         if len(episodeStats) > 0:
             episodeStats.plot(x="episode", y=["total_reward"])
             plt.title('total reward vs episodes')
+            if save_directory is not None:
+                plt.savefig(os.path.join(save_directory, f'total_reward_vs_episodes{suffix}'))
             plt.show()
 
         timestepStats.plot(x="timestep", y=["td error"])
         plt.title('td error vs timestep')
+        if save_directory is not None:
+            plt.savefig(os.path.join(save_directory, f'td_error_vs_timestep{suffix}'))
         plt.show()
