@@ -38,10 +38,10 @@ def main():
     policy = BetaPolicy(NeuralNetwork(layer_dimensions=(107, 256, 256, 58)))
     value_function = NeuralNetwork(layer_dimensions=(107, 128, 64, 1))
 
-    environment = MujocoEnvironment(model, data)
+    environment = MujocoEnvironment(model, data, use_viewer=False)
 
-    # policy.neural_network.load_state_dict(torch.load("../saved_networks/policy/policy.pth"))
-    # value_function.load_state_dict(torch.load("../saved_networks/value/value_function.pth"))
+    policy.neural_network.load_state_dict(torch.load("../saved_networks/policy/policy_1773253905.pth"))
+    value_function.load_state_dict(torch.load("../saved_networks/value/value_function_1773253905.pth"))
 
     reward = Reward1(robot, np.array([10, 0, 0]), "torso_link")
     actor_critic = ActorCritic(environment, policy, value_function, reward, robot)

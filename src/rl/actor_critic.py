@@ -139,6 +139,7 @@ class ActorCritic:
 
             episodeNumber = 0
             while environment.is_running():
+                print(f"Training Episode: {episodeNumber}")
                 total_reward = self.train_episode(environment)
 
                 self.episodeStatistics.append({"episode": episodeNumber, "total_reward": total_reward})
