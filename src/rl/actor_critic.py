@@ -126,7 +126,12 @@ class ActorCritic:
                     p += self.hyperparams.policy_learning_rate * td_error * eligibility
 
             decay *= self.hyperparams.discount_factor
-            self.timestepStatistics.append({"timestep": self.total_timesteps, "td error": td_error.item()})
+
+
+            self.timestepStatistics.append(
+                {"timestep": self.total_timesteps,
+                 "|td error|": abs(td_error.item())}
+                | self.policy_1.get_statistics())
             self.total_timesteps += 1
 
             if terminal:
@@ -146,21 +151,22 @@ class ActorCritic:
                 episodeNumber += 1
 
 
-    def plot_stats(self, save_directory=None, suffix=None):
+    def plot_stats(self, save_directory=None, suffix=''):
         episodeStats = pd.DataFrame(self.episodeStatistics)
         timestepStats = pd.DataFrame(self.timestepStatistics)
 
-        suffix = f"_{int(time.time())}" if suffix is None else suffix
-
         if len(episodeStats) > 0:
-            episodeStats.plot(x="episode", y=["total_reward"])
-            plt.title('total reward vs episodes')
-            if save_directory is not None:
-                plt.savefig(os.path.join(save_directory, f'total_reward_vs_episodes{suffix}'))
-            plt.show()
+            for col in [c for c in episodeStats.columns if c != "episode"]:
+                episodeStats.plot(x="episode", y=[col])
+                plt.title(f'{col} vs episode{suffix}')
+                if save_directory is not None:
+                    plt.savefig(os.path.join(save_directory, f'{col.replace(" ", "_")}_vs_episode{suffix}'))
+                plt.show()
 
-        timestepStats.plot(x="timestep", y=["td error"])
-        plt.title('td error vs timestep')
-        if save_directory is not None:
-            plt.savefig(os.path.join(save_directory, f'td_error_vs_timestep{suffix}'))
-        plt.show()
+        if len(timestepStats) > 0:
+            for col in [c for c in timestepStats.columns if c != "timestep"]:
+                timestepStats.plot(x="timestep", y=[col])
+                plt.title(f'{col} vs timestep{suffix}')
+                if save_directory is not None:
+                    plt.savefig(os.path.join(save_directory, f'{col.replace(" ", "_")}_vs_timestep{suffix}'))
+                plt.show()

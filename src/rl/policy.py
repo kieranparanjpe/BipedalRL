@@ -20,3 +20,7 @@ class Policy(ABC):
     @abstractmethod
     def sample_with_log_prob(self, state):
         raise NotImplemented
+
+    @abstractmethod
+    def get_statistics(self):
+         raise NotImplemented

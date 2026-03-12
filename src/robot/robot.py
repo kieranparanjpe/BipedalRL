@@ -10,10 +10,11 @@ from .body_metadata import BodyMetadata
 
 class Robot:
 
-    def __init__(self, model : mujoco.MjModel, data : mujoco.MjData, root_name : str):
+    def __init__(self, model : mujoco.MjModel, data : mujoco.MjData, root_name : str, robot_type):
         self.model : mujoco.MjModel= model
         self.data : mujoco.MjData  = data
 
+        self.robot_type = robot_type
         self.root_name = root_name
 
         def direct_joints_of_body(bid: int) -> list[int]:
@@ -112,7 +113,7 @@ class Robot:
         self.ctrl_all_indices = np.array(self.ctrl_all_indices)
         self.revolute_joint_indices = np.array(self.revolute_joint_indices)
 
-        self.ctrl_range = self.model.actuator_ctrlrange[self.ctrl_all_indices][:,1] / 2
+        self.ctrl_range = self.model.actuator_ctrlrange[self.ctrl_all_indices][:,1] / 1
 
     def resolve_joint_name_local_id(self, idOrName : str | int) -> int:
         if isinstance(idOrName, int):
