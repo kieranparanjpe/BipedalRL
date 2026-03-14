@@ -35,7 +35,8 @@ class BetaPolicy(Policy):
         return action
 
     def get_statistics(self):
-        return {"mean(abs(alpha-beta))": (self._alpha - self._beta).abs().mean().detach().item()}
+        return {"mean(abs(alpha-beta))": (self._alpha - self._beta).abs().mean().detach().item(),
+                "mean(alpha+beta)": (self._alpha + self._beta).mean().detach().item()}
 
     def scale_action(self, action):
         return (action - 0.5) * 2

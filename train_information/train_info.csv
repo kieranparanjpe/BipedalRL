@@ -1,7 +1,7 @@
-full_suffix,instance,timeSuffix,robot_type,policy_learning_rate,value_learning_rate,policy_trace_decay,value_trace_decay,discount_factor,policy_changeout,value_changeout
-_I2_1773292966,2,_1773292966,go2,1e-11,1e-07,0.9,0.9,0.98,0,0
-full_suffix,instance,timeSuffix,robot_type,policy_learning_rate,value_learning_rate,policy_trace_decay,value_trace_decay,discount_factor,policy_changeout,value_changeout
-_I1_1773292966,1,_1773292966,go2,1e-11,1e-07,0.95,0.95,0.95,0,0
-_I0_1773292966,0,_1773292966,go2,1e-12,1e-08,0.9,0.9,0.98,0,0
-_I3_1773292966,3,_1773292966,go2,1e-10,1e-06,0.95,0.95,0.95,0,0
-_I4_1773292966,4,_1773292966,go2,1e-10,1e-06,0.9,0.9,0.98,0,0
+full_suffix,instance,timeSuffix,robot_type,policy_learning_rate,value_learning_rate,policy_trace_decay,value_trace_decay,discount_factor,policy_changeout,value_changeout,max_td_error_mag,max_value_trace,max_policy_trace,max_value_weight_update,max_policy_weight_update
+_I4_1773339190,4,_1773339190,go2,1e-07,1e-08,0.85,0.85,1.0,0,0,2.0,8.0,8.0,0.01,0.01
+_I6_1773339190,6,_1773339190,go2,1e-09,1e-08,0.85,0.85,1.0,0,0,2.0,8.0,8.0,0.01,0.01
+_I1_1773339190,1,_1773339190,go2,0.1,1e-08,0.85,0.85,0.92,0,0,2.0,8.0,8.0,0.01,0.01
+_I0_1773339190,0,_1773339190,go2,1.0,1e-08,0.85,0.85,0.92,0,0,2.0,8.0,8.0,0.01,0.01
+_I5_1773339190,5,_1773339190,go2,1e-08,1e-08,0.85,0.85,1.0,0,0,2.0,8.0,8.0,0.01,0.01
+_I3_1773339190,3,_1773339190,go2,0.001,1e-08,0.85,0.85,0.92,0,0,2.0,8.0,8.0,0.01,0.01

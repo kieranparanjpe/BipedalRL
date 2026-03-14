@@ -10,6 +10,11 @@ SAVE_OUTPUT = True
 LOAD_SUFFIX = None
 LOAD_SUFFIX_INDEXED = False
 
+vlr = [1e-8]
+plr1 = [1, 1e-1, 1e-2, 1e-3]
+plr2 = [1e-7, 1e-8, 1e-9]
+
+'''
 hyperparams_grid = [
     Hyperparameters(
         policy_learning_rate=1e-12,
@@ -57,6 +62,43 @@ hyperparams_grid = [
         value_changeout=0,
     )
 ]
+'''
+hyperparams_grid = []
+for v in vlr:
+    for p in plr1:
+        hyperparams_grid.append(
+            Hyperparameters(
+                policy_learning_rate=p,
+                value_learning_rate=v,
+                policy_trace_decay=0.85,
+                value_trace_decay=0.85,
+                discount_factor=0.92,
+                policy_changeout=0,
+                value_changeout=0,
+                max_td_error_mag=2.0,
+                max_value_trace=8.0,
+                max_policy_trace=8.0,
+                max_value_weight_update=0.01,
+                max_policy_weight_update=0.01
+            ),
+        )
+    for p in plr2:
+        hyperparams_grid.append(
+            Hyperparameters(
+                policy_learning_rate=p,
+                value_learning_rate=v,
+                policy_trace_decay=0.85,
+                value_trace_decay=0.85,
+                discount_factor=1,
+                policy_changeout=0,
+                value_changeout=0,
+                max_td_error_mag=2.0,
+                max_value_trace=8.0,
+                max_policy_trace=8.0,
+                max_value_weight_update=0.01,
+                max_policy_weight_update=0.01
+            ),
+        )
 
 
 def build_cmd(hyperparams, robot, instance, use_viewer, save_output, load_suffix):

@@ -4,7 +4,7 @@ import numpy as np
 import numpy.typing as npt
 
 from .reward import Reward
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from ..robot.robot import Robot
@@ -12,12 +12,12 @@ if TYPE_CHECKING:
 class RewardGo2(Reward):
 
     def __init__(self, robot : Robot, target_position : npt.NDArray[np.float32],
-                 chest_body_name : str, completed_distance = 0.5, floor_distance = 0.15):
+                 feet_body_names : List[str], completed_distance = 0.5, floor_distance = 0.15):
         super().__init__(robot)
         if target_position.shape != (3,):
             raise ValueError("target position has wrong shape. should be (3,)")
         self.target_position = target_position
-        self.chest_body_name = chest_body_name
+        self.feet_body_names = feet_body_names
 
         self.completed_distance = completed_distance
         self.floor_distance = floor_distance
@@ -45,21 +45,24 @@ class RewardGo2(Reward):
         current_distance = self.distance_to_target(root_position)
         distance_reward = 1 - current_distance / self.starting_distance
 
-        chest_position = self.robot.get_world_position(self.chest_body_name).reshape(3)
-        chest_above_floor = 0.5 if chest_position[2] > self.floor_distance else 0
+        chest_above_floor = 0.5 if root_position[2] > self.floor_distance else 0
 
         upright_factor = (np.array([0, 0, 1]).reshape((1,3)) @ self.robot.get_world_rotation(
-            self.chest_body_name).reshape((3, 3))[:, 2]).item() * 0.5
+            self.robot.root_name).reshape((3, 3))[:, 2]).item() * 0.5
 
-        return distance_reward + upright_factor + chest_above_floor
+        chest_above_feet = 0
+        for foot in self.feet_body_names:
+            foot_position = self.robot.get_world_position(foot)
+            chest_above_feet += 0.1 if root_position[2] > foot_position[2] else 0
+
+        return distance_reward + upright_factor + chest_above_floor + chest_above_feet
 
     def is_terminal(self) -> bool:
         self.robot.compute_forward_kinematics()
-        chest_position = self.robot.get_world_position(self.chest_body_name).reshape(3)
         root_position = self.robot.get_world_position(self.robot.root_name).reshape(3)
         current_square_distance = self.square_distance_to_target(root_position)
 
-        if chest_position[2] < self.floor_distance:
+        if root_position[2] < self.floor_distance:
             self.steps_on_floor += 1
 
         return self.steps_on_floor > 50 or current_square_distance < self.completed_distance**2

@@ -48,10 +48,23 @@ class Trainer:
 
         self.environment = MujocoEnvironment(self.model, self.data, use_viewer=viewer, on_key=self.on_key)
         if hyperparameters is None:
-            self.actor_critic = ActorCritic(self.environment, self.policy, self.value_function, self.reward, self.robot)
+            self.actor_critic = ActorCritic(
+                self.environment,
+                self.policy,
+                self.value_function,
+                self.reward,
+                self.robot
+            )
         else:
-            self.actor_critic = ActorCritic(self.environment, self.policy, self.value_function, self.reward,
-                                            self.robot, hyperparams=hyperparameters)
+            self.actor_critic = ActorCritic(
+                self.environment,
+                self.policy,
+                self.value_function,
+                self.reward,
+                self.robot,
+                hyperparams=hyperparameters
+            )
+
 
     def init_g1(self):
         self.robot = Robot(self.model, self.data, 'pelvis', 'g1')
@@ -63,9 +76,11 @@ class Trainer:
         self.robot = Robot(self.model, self.data, 'base_link', 'go2')
         self.policy = BetaPolicy(NeuralNetwork(layer_dimensions=(56, 256, 256, 24)))
         self.value_function = NeuralNetwork(layer_dimensions=(56, 128, 64, 1))
-        self.reward = RewardGo2(self.robot, np.array([10, 0, 0]), "base_link")
+        self.reward = RewardGo2(self.robot, np.array([10, 0, 0]),
+                                ['FR_foot', 'FL_foot', 'RR_foot', 'RL_foot'])
 
     def train(self):
+
         self.actor_critic.train()
 
         if self.save_on_end:
@@ -104,8 +119,6 @@ class Trainer:
     def on_key(self, keycode: int):
         timeSuffix = f"_{int(time.time())}"
         if keycode == (ord('S')):
-            self.save_networks(self.instanceSuffix)
-        if keycode == (ord('A')):
             self.save_networks(self.instanceSuffix + timeSuffix)
         if keycode == (ord('P')):
             self.actor_critic.plot_stats()

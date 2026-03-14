@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import time
 from dataclasses import dataclass
 
 import torch
@@ -11,7 +10,7 @@ from .environment import Environment
 from .neural_network import NeuralNetwork
 from .policy import Policy
 from .reward import Reward
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 import matplotlib.pyplot as plt
 
 if TYPE_CHECKING:
@@ -27,19 +26,29 @@ class Hyperparameters:
     discount_factor : float
     policy_changeout : int
     value_changeout : int
+    max_td_error_mag : float
+    max_value_trace : float
+    max_policy_trace : float
+    max_value_weight_update : float
+    max_policy_weight_update : float
 
 class ActorCritic:
 
     def __init__(self, environment : Environment, policy : Policy, value_function : NeuralNetwork,
                  reward : Reward, robot : Robot,
                  hyperparams : Hyperparameters = Hyperparameters(
-                     policy_learning_rate=1e-12,
-                     value_learning_rate=1e-8,
-                     policy_trace_decay=0.95,
-                     value_trace_decay=0.95,
-                     discount_factor=0.95,
-                     policy_changeout=1000,
-                     value_changeout=1000
+                     policy_learning_rate=1e-2,
+                     value_learning_rate=3e-8,
+                     policy_trace_decay=0.85,
+                     value_trace_decay=0.85,
+                     discount_factor=0.92,
+                     policy_changeout=0,
+                     value_changeout=0,
+                     max_td_error_mag=2.0,
+                     max_value_trace=8.0,
+                     max_policy_trace=8.0,
+                     max_value_weight_update=0.01,
+                     max_policy_weight_update=0.01
                  )):
         self.environment = environment
         self.policy_1 = policy # used for inference
@@ -103,34 +112,38 @@ class ActorCritic:
             )
 
             bootstrap = 0.0 if terminal else self.hyperparams.discount_factor * value_function_next_state
-            td_error = (reward + bootstrap - value_function_current_state).detach()
+            td_error = ((reward + bootstrap - value_function_current_state)
+                        .clip(-self.hyperparams.max_td_error_mag, self.hyperparams.max_td_error_mag).detach())
 
 
             for i in range(len(self.value_eligibility_trace)):
                 self.value_eligibility_trace[i] = (
                         self.hyperparams.discount_factor * self.hyperparams.value_trace_decay
                         * self.value_eligibility_trace[i] + grad_value_function_current_state[i].detach()
-                )
-
+                ).clip(-self.hyperparams.max_value_trace, self.hyperparams.max_value_trace)
 
             for i in range(len(self.policy_eligibility_trace)):
                 self.policy_eligibility_trace[i] = (
                         self.hyperparams.discount_factor * self.hyperparams.policy_trace_decay
-                        * self.policy_eligibility_trace[i] + decay * log_grad_policy_current_state[i].detach())
+                        * self.policy_eligibility_trace[i] + decay * log_grad_policy_current_state[i].detach()
+                ).clip(-self.hyperparams.max_policy_trace, self.hyperparams.max_policy_trace)
 
-            # for p in self.value_function.parameters():
             with torch.no_grad():
                 for p, eligibility in zip(self.value_function_1.parameters(), self.value_eligibility_trace):
-                    p += self.hyperparams.value_learning_rate * td_error * eligibility
+                    p += (self.hyperparams.value_learning_rate * td_error * eligibility).clip(
+                        -self.hyperparams.max_value_weight_update, self.hyperparams.max_value_weight_update
+                    )
                 for p, eligibility in zip(self.policy_1.neural_network.parameters(), self.policy_eligibility_trace):
-                    p += self.hyperparams.policy_learning_rate * td_error * eligibility
+                    p += (self.hyperparams.policy_learning_rate * td_error * eligibility).clip(
+                        -self.hyperparams.max_policy_weight_update, self.hyperparams.max_policy_weight_update
+                    )
 
             decay *= self.hyperparams.discount_factor
 
 
             self.timestepStatistics.append(
                 {"timestep": self.total_timesteps,
-                 "|td error|": abs(td_error.item())}
+                 "abs(td error)": abs(td_error.item())}
                 | self.policy_1.get_statistics())
             self.total_timesteps += 1
 
