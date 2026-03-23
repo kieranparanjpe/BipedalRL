@@ -126,7 +126,7 @@ class ActorCritic:
             self.update_eligibility_traces(decay, grad_value_function_current_state, log_grad_policy_current_state)
 
             # update weights
-            self.update_weights(td_error)
+            update_stats = self.update_weights(td_error)
 
             decay *= self.hyperparams.discount_factor_decay if self.hyperparams.discount_factor_decay is not None \
                 else self.hyperparams.discount_factor
@@ -139,6 +139,7 @@ class ActorCritic:
                     "reward": reward.item()
                 }
                 | gradient_stats
+                | update_stats
                 | self.policy_1.get_statistics())
             self.total_timesteps += 1
             timesteps += 1
@@ -147,7 +148,7 @@ class ActorCritic:
 
         return total_reward / timesteps
 
-    def update_weights(self, td_error: Tensor):
+    def update_weights(self, td_error: Tensor) -> dict[str, float]:
         with torch.no_grad():
             value_params = list(self.value_function_1.parameters())
             policy_params = list(self.policy_1.neural_network.parameters())
@@ -157,13 +158,24 @@ class ActorCritic:
             value_deltas = torch._foreach_mul(self.value_eligibility_trace, self.hyperparams.value_learning_rate)
             # need [] * len for broadcasting
             value_deltas = torch._foreach_mul(value_deltas, [td] * len(value_deltas))
-            cap_tensors_global_magnitude_(value_deltas, self.hyperparams.max_value_weight_update)
+            value_update_norm_before_clip = cap_tensors_global_magnitude_(
+                value_deltas, self.hyperparams.max_value_weight_update
+            ).item()
             torch._foreach_add_(value_params, value_deltas)
 
             policy_deltas = torch._foreach_mul(self.policy_eligibility_trace, self.hyperparams.policy_learning_rate)
             policy_deltas = torch._foreach_mul(policy_deltas, [td] * len(policy_deltas))
-            cap_tensors_global_magnitude_(policy_deltas, self.hyperparams.max_policy_weight_update)
+            policy_update_norm_before_clip = cap_tensors_global_magnitude_(
+                policy_deltas, self.hyperparams.max_policy_weight_update
+            ).item()
             torch._foreach_add_(policy_params, policy_deltas)
+
+        return {
+            "value_update_norm_before_clip": value_update_norm_before_clip,
+            "value_update_norm_after_clip": min(value_update_norm_before_clip, self.hyperparams.max_value_weight_update),
+            "policy_update_norm_before_clip": policy_update_norm_before_clip,
+            "policy_update_norm_after_clip": min(policy_update_norm_before_clip, self.hyperparams.max_policy_weight_update),
+        }
 
     def update_eligibility_traces(self, decay: int, grad_value_function_current_state: tuple[Tensor, ...],
                                   log_grad_policy_current_state: tuple[Tensor, ...]):
