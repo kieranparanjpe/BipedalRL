@@ -11,7 +11,7 @@ from .environment import Environment
 from .neural_network import NeuralNetwork
 from .policy import Policy
 from .reward import Reward
-from typing import TYPE_CHECKING, Optional, Sequence, Any
+from typing import TYPE_CHECKING, Optional, Sequence
 
 if TYPE_CHECKING:
     from src.robot.robot import Robot
@@ -116,7 +116,7 @@ class ActorCritic:
                 bootstrapping_value_function, current_state, next_state
             )
 
-            grad_value_function_current_state, log_grad_policy_current_state = self.calculate_gradients(
+            grad_value_function_current_state, log_grad_policy_current_state, gradient_stats = self.calculate_gradients(
                 log_prob_policy, value_function_current_state
             )
 
@@ -138,6 +138,7 @@ class ActorCritic:
                     "abs(td error)": abs(td_error.item()),
                     "reward": reward.item()
                 }
+                | gradient_stats
                 | self.policy_1.get_statistics())
             self.total_timesteps += 1
             timesteps += 1
@@ -199,7 +200,9 @@ class ActorCritic:
         td_error.clamp_(-self.hyperparams.max_td_error_mag, self.hyperparams.max_td_error_mag)
         return td_error
 
-    def calculate_gradients(self, log_prob_policy, value_function_current_state: Tensor) -> tuple[tuple[Tensor, ...], tuple[Tensor, ...]]:
+    def calculate_gradients(self, log_prob_policy, value_function_current_state: Tensor) -> tuple[
+        tuple[Tensor, ...], tuple[Tensor, ...], dict[str, float]
+    ]:
         # find gradients. they dont track gradient / comp graph by default.
         log_grad_policy_current_state = (
             torch.autograd.grad(log_prob_policy, list(self.policy_1.neural_network.parameters()))
@@ -209,10 +212,20 @@ class ActorCritic:
             torch.autograd.grad(value_function_current_state, list(self.value_function_1.parameters()))
         )
 
-        # clamp magnitude of gradients in place
-        cap_tensors_global_magnitude_(log_grad_policy_current_state, self.hyperparams.max_policy_grad_norm)
-        cap_tensors_global_magnitude_(grad_value_function_current_state, self.hyperparams.max_value_grad_norm)
-        return grad_value_function_current_state, log_grad_policy_current_state
+        # clamp magnitude of gradients in place; function returns pre-clip norm
+        policy_grad_norm_before_clip = cap_tensors_global_magnitude_(
+            log_grad_policy_current_state, self.hyperparams.max_policy_grad_norm
+        ).item()
+        value_grad_norm_before_clip = cap_tensors_global_magnitude_(
+            grad_value_function_current_state, self.hyperparams.max_value_grad_norm
+        ).item()
+
+        return grad_value_function_current_state, log_grad_policy_current_state, {
+            "policy_grad_norm_before_clip": policy_grad_norm_before_clip,
+            "policy_grad_norm_after_clip": min(policy_grad_norm_before_clip, self.hyperparams.max_policy_grad_norm),
+            "value_grad_norm_before_clip": value_grad_norm_before_clip,
+            "value_grad_norm_after_clip": min(value_grad_norm_before_clip, self.hyperparams.max_value_grad_norm),
+        }
 
     def estimate_value_function(self, bootstrapping_value_function: NeuralNetwork, current_state: Tensor,
                                 next_state: Tensor) -> tuple[Tensor, Tensor]:
