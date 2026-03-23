@@ -136,7 +136,10 @@ class ActorCritic:
                 {
                     "timestep": self.total_timesteps,
                     "abs(td error)": abs(td_error.item()),
-                    "reward": reward.item()
+                    "reward": reward.item(),
+                    "action_mean": action.detach().mean().item(),
+                    "action_std": action.detach().std().item(),
+                    "action_l2_norm": action.detach().norm().item(),
                 }
                 | gradient_stats
                 | update_stats
