@@ -1,4 +1,5 @@
 import argparse
+import time
 from dataclasses import fields
 
 import numpy as np
@@ -52,24 +53,30 @@ def main(args):
         hyperparams = Hyperparameters(**hyperparam_values)
 
     trainer = Trainer(args.robot,
-                      viewer=args.use_viewer,
-                      save_on_end=args.save_output,
-                      load_suffix=args.load_suffix,
+                      use_viewer=args.use_viewer,
+                      save_on_end=args.save_on_end,
                       instance=args.instance,
+                      start_time=args.start_time,
+                      load_network_time=args.load_network_time,
+                      load_network_instance=args.load_network_index,
                       hyperparameters=hyperparams)
     trainer.train()
 
-
-if __name__ == '__main__':
+def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--robot", type=str, default='go2')
     parser.add_argument("--use_viewer", type=str2bool, default=True)
-    parser.add_argument("--save_output", type=str2bool, default=False)
-    parser.add_argument("--load_suffix", type=str, default=None)
-    parser.add_argument("--instance", type=int, default=None)
+    parser.add_argument("--save_on_end", type=str2bool, default=False)
+    parser.add_argument("--instance", type=int, default=0)
+    parser.add_argument("--start_time", type=int, default=int(time.time()))
+    parser.add_argument("--load_network_time", type=str, default=None)
+    parser.add_argument("--load_network_index", type=int, default=0)
 
     for field in fields(Hyperparameters):
         parser.add_argument(f"--{field.name}", type=hyperparam_arg_type(field.type), default=None)
 
-    args = parser.parse_args()
-    main(args)
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    main(parse_args())

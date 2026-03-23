@@ -2,7 +2,11 @@
 <module type="PYTHON_MODULE" version="4">
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/train_information" />
+      <excludeFolder url="file://$MODULE_DIR$/train_information/go2/instance_26_03_23_04_31_16/rl" />
+      <excludeFolder url="file://$MODULE_DIR$/train_information/go2/instance_26_03_23_05_25_41/rl" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

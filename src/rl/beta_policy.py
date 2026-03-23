@@ -12,9 +12,6 @@ class BetaPolicy(Policy):
         self._alpha = None
         self._beta = None
 
-    def make_init_copy(self):
-        return BetaPolicy(NeuralNetwork.from_other(self.neural_network))
-
     def get_dist(self, state: torch.Tensor):
         y = self.neural_network(state)
         y = (F.softplus(y) + 2).clamp(max=100)

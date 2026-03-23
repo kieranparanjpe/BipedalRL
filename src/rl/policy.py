@@ -10,10 +10,6 @@ class Policy(ABC):
         self.neural_network = network
 
     @abstractmethod
-    def make_init_copy(self):
-        raise NotImplemented
-
-    @abstractmethod
     def sample(self, state):
         raise NotImplemented
 
