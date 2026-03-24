@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 class RewardGo2(Reward):
 
     def __init__(self, robot : Robot, target_position : npt.NDArray[np.float32],
-                 feet_body_names : List[str], completed_distance = 0.5, floor_distance = 0.15):
+                 feet_body_names : List[str], completed_distance = 0.5, floor_distance = 0.25):
         super().__init__(robot)
         if target_position.shape != (3,):
             raise ValueError("target position has wrong shape. should be (3,)")
@@ -28,6 +28,7 @@ class RewardGo2(Reward):
         self.starting_distance = self.distance_to_target(root_position)
         self.steps_on_floor = 0
         self.steps_upside_down = 0
+        self.starting_chest_height = root_position[2]
 
 
     def square_distance_to_target(self, root_position):
@@ -47,7 +48,8 @@ class RewardGo2(Reward):
         current_distance = self.distance_to_target(root_position)
         distance_reward = 1 - current_distance / self.starting_distance
 
-        chest_above_floor = 0.5 if root_position[2] > self.floor_distance else 0
+        chest_above_floor = 0.5 * (root_position[2] - self.floor_distance) / (self.starting_chest_height -
+                                                                             self.floor_distance)
 
         # take the dot product between (0, 0, 1) and final entry of rotation matrix.
         upright_factor = ((np.array([0, 0, 1]).reshape((1,3)) @

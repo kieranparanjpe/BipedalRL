@@ -2,14 +2,17 @@ import signal
 from contextlib import nullcontext
 from typing import Callable, Optional
 
+from io_controller import IOController
 from .environment import Environment
 import mujoco
 import mujoco.viewer
 
 class MujocoEnvironment(Environment):
 
-    def __init__(self, model : mujoco.MjModel, data : mujoco.MjData, on_key : Optional[Callable[[int], None]] = None,
+    def __init__(self, model: mujoco.MjModel, data: mujoco.MjData, on_key: Optional[Callable[[int],
+    None]] = None,
                  use_viewer=True):
+        super().__init__()
         self.model = model
         self.data = data
 
@@ -17,11 +20,6 @@ class MujocoEnvironment(Environment):
         self.viewer = None
         self.use_viewer = use_viewer
         self.render_enabled = True
-        self.on_key = on_key
-        self.interrupt = False
-        signal.signal(signal.SIGINT, self._handle_sigint)
-
-    def set_on_key(self, on_key : Optional[Callable[[int], None]]):
         self.on_key = on_key
 
     def _on_key(self, keycode: int):
@@ -52,13 +50,10 @@ class MujocoEnvironment(Environment):
             self.viewer.sync()
 
     def is_running(self):
-        if self.interrupt:
+        if self._end_environment:
             return False
 
         return self.viewer is None or self.viewer.is_running()
-
-    def _handle_sigint(self, sig, frame):
-        self.interrupt = True
 
     def reset(self):
         mujoco.mj_resetData(self.model, self.data)

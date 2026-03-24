@@ -11,13 +11,15 @@ class BetaPolicy(Policy):
         super().__init__(network)
         self._alpha = None
         self._beta = None
+        self._entropy = None
 
     def get_dist(self, state: torch.Tensor):
         y = self.neural_network(state)
         y = (F.softplus(y) + 2).clamp(max=100)
         self._alpha, self._beta = torch.chunk(y, 2, dim=-1)
-        return Beta(self._alpha, self._beta)
-
+        dist = Beta(self._alpha, self._beta)
+        self._entropy = dist.entropy().mean().detach().item()
+        return dist
     def sample_with_log_prob(self, state: torch.Tensor):
         dist = self.get_dist(state)
         raw_action = dist.sample()
@@ -33,7 +35,8 @@ class BetaPolicy(Policy):
 
     def get_statistics(self):
         return {"mean(abs(alpha-beta))": (self._alpha - self._beta).abs().mean().detach().item(),
-                "mean(alpha+beta)": (self._alpha + self._beta).mean().detach().item()}
+                "mean(alpha+beta)": (self._alpha + self._beta).mean().detach().item(),
+                "policy_entropy": self._entropy}
 
     def scale_action(self, action):
         return (action - 0.5) * 2
