@@ -16,7 +16,8 @@ class NeuralNetwork(nn.Module):
 
     @classmethod
     def from_other(cls, other : NeuralNetwork):
-        network = NeuralNetwork(other.layer_dimensions)
+        device = next(other.parameters()).device
+        network = NeuralNetwork(other.layer_dimensions).to(device)
         network.load_state_dict(other.state_dict())
         return network
 

@@ -23,6 +23,8 @@ class Trainer:
         robot_type_to_scene_file = {'g1' : '../robots/g1/scene_29dof.xml', 'go2': '../robots/go2/scene.xml',
                                     'cube' : '../robots/cube/scene.xml'}
 
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         self.robot_type = robot_type
         self.start_time_string = datetime.fromtimestamp(start_time, tz=timezone.utc).strftime("%y_%m_%d_%H_%M_%S")
         self.instance = instance
@@ -59,7 +61,8 @@ class Trainer:
             self.reward,
             self.robot,
             hyperparams=self.hyperparams,
-            timestep_callback=self.timestep_callback
+            timestep_callback=self.timestep_callback,
+            device=self.device
         )
 
         if self.load_network_time is not None:
@@ -73,23 +76,23 @@ class Trainer:
 
     def init_g1(self) -> tuple[Robot, Policy, NeuralNetwork, Reward]:
         robot = Robot(self.model, self.data, 'pelvis', 'g1')
-        policy = BetaPolicy(NeuralNetwork(layer_dimensions=(107, 256, 256, 58)))
-        value_function = NeuralNetwork(layer_dimensions=(107, 128, 64, 1))
+        policy = BetaPolicy(NeuralNetwork(layer_dimensions=(107, 256, 256, 58)).to(self.device))
+        value_function = NeuralNetwork(layer_dimensions=(107, 128, 64, 1)).to(self.device)
         reward = RewardG1(robot, np.array([1, 0, 0]), "torso_link")
         return robot, policy, value_function, reward
 
     def init_go2(self) -> tuple[Robot, Policy, NeuralNetwork, Reward]:
         robot = Robot(self.model, self.data, 'base_link', 'go2')
-        policy = BetaPolicy(NeuralNetwork(layer_dimensions=(56, 256, 256, 24)))
-        value_function = NeuralNetwork(layer_dimensions=(56, 128, 64, 1))
+        policy = BetaPolicy(NeuralNetwork(layer_dimensions=(56, 256, 256, 24)).to(self.device))
+        value_function = NeuralNetwork(layer_dimensions=(56, 128, 64, 1)).to(self.device)
         reward = RewardGo2(robot, np.array([1, 0, 0]),
                                 ['FR_foot', 'FL_foot', 'RR_foot', 'RL_foot'])
         return robot, policy, value_function, reward
 
     def init_cube(self) -> tuple[Robot, Policy, NeuralNetwork, Reward]:
         robot = Robot(self.model, self.data, 'cube', 'cube')
-        policy = BetaPolicy(NeuralNetwork(layer_dimensions=(4, 16, 32, 4)))
-        value_function = NeuralNetwork(layer_dimensions=(4, 16, 32, 1))
+        policy = BetaPolicy(NeuralNetwork(layer_dimensions=(4, 16, 32, 4)).to(self.device))
+        value_function = NeuralNetwork(layer_dimensions=(4, 16, 32, 1)).to(self.device)
         reward = RewardCube(robot, np.array([1, 0, 0]),
                             max_steps_without_improvement=self.hyperparams.episodes_without_improvement)
         return robot, policy, value_function, reward
@@ -127,8 +130,8 @@ class Trainer:
 
     def load_networks(self):
         policy_path, value_path = self.network_paths(self.load_network_time, self.load_network_instance)
-        self.policy.neural_network.load_state_dict(torch.load(policy_path))
-        self.value_function.load_state_dict(torch.load(value_path))
+        self.policy.neural_network.load_state_dict(torch.load(policy_path, map_location=self.device))
+        self.value_function.load_state_dict(torch.load(value_path, map_location=self.device))
 
     def save_networks(self):
         print(f"Saving networks for instance: {self.instance}")

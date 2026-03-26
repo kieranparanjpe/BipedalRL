@@ -62,7 +62,9 @@ class ActorCritic:
                  reward : Reward, robot : Robot,
                  hyperparams : Hyperparameters,
                  timestep_callback : Optional[Callable[[int], None]] = None,
-                 generate_timestep_statistics = False):
+                 generate_timestep_statistics = False,
+                 device = torch.device('cpu')):
+        self.device = device
         self.environment = environment
         self.policy_1 = policy # used for inference
         self.value_function_1 = value_function # used for inference
@@ -72,7 +74,7 @@ class ActorCritic:
         self.hyperparams = hyperparams
 
         self.value_eligibility_trace = [torch.zeros_like(p) for p in value_function.parameters()]
-        self.policy_eligibility_trace =[torch.zeros_like(p) for p in policy.neural_network.parameters()]
+        self.policy_eligibility_trace = [torch.zeros_like(p) for p in policy.neural_network.parameters()]
 
         self.generate_timestep_statistics = generate_timestep_statistics
 
@@ -115,7 +117,7 @@ class ActorCritic:
             else self.value_function_2
 
         decay = 1
-        total_reward = 0
+        total_reward = torch.zeros(1, dtype=torch.float32, device=self.device)
         timesteps = 0
 
         timestep_stats_sum = None
@@ -130,7 +132,9 @@ class ActorCritic:
                     self.value_function_2.load_state_dict(self.value_function_1.state_dict())
 
             # Get current state S
-            current_state = torch.from_numpy(self.robot.get_state_sin_cos_no_accel()).float()
+            current_state = torch.as_tensor(self.robot.get_state_sin_cos_no_accel(), dtype=torch.float32,
+                                         device=self.device)
+
             # Sample best action A, based on S. Also get the log probability of A, ln[P(A)]
             action, log_prob_policy = self.policy_1.sample_with_log_prob(current_state)
 
@@ -140,11 +144,12 @@ class ActorCritic:
             environment.step() # Step the environment.
 
             # Find next state  after stepping env. S'
-            next_state = torch.from_numpy(self.robot.get_state_sin_cos_no_accel()).float()
+            next_state = torch.as_tensor(self.robot.get_state_sin_cos_no_accel(), dtype=torch.float32,
+                                         device=self.device)
 
             # Get next reward
-            reward = torch.tensor(self.reward.reward(), dtype=torch.float32).detach()
-            total_reward += reward.item()
+            reward = torch.tensor(self.reward.reward(), dtype=torch.float32, device=self.device)
+            total_reward += reward
             terminal = self.reward.is_terminal(timesteps)
 
             value_function_current_state, value_function_next_state = self.estimate_value_function(
@@ -197,7 +202,7 @@ class ActorCritic:
                 break
 
         timestep_summary = {k: timestep_stats_sum[k] / timesteps for k in timestep_stats_sum.keys()} | {
-            'episode_length': timesteps, 'total_reward_per_timestep': total_reward / timesteps}
+            'episode_length': timesteps, 'total_reward_per_timestep': total_reward.item() / timesteps}
         return timestep_summary
 
     def update_weights(self, td_error: Tensor) -> dict[str, float]:
