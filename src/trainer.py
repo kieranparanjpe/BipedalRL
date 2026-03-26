@@ -25,6 +25,8 @@ class Trainer:
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        print(f"Using device {self.device}")
+
         self.robot_type = robot_type
         self.start_time_string = datetime.fromtimestamp(start_time, tz=timezone.utc).strftime("%y_%m_%d_%H_%M_%S")
         self.instance = instance
