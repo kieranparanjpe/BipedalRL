@@ -75,7 +75,7 @@ def main(args):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--robot", type=str, default='go2')
+    parser.add_argument("--robot", type=str, default='cube')
     parser.add_argument("--use_viewer", type=str2bool, default=True)
     parser.add_argument("--save_on_end", type=str2bool, default=False)
     parser.add_argument("--instance", type=int, default=0)

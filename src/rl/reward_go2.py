@@ -12,8 +12,9 @@ if TYPE_CHECKING:
 class RewardGo2(Reward):
 
     def __init__(self, robot : Robot, target_position : npt.NDArray[np.float32],
-                 feet_body_names : List[str], completed_distance = 0.5, floor_distance = 0.25):
-        super().__init__(robot)
+                 feet_body_names : List[str], completed_distance = 0.5, floor_distance = 0.25,
+                 max_timesteps : int = 10000):
+        super().__init__(robot, max_timesteps)
         if target_position.shape != (3,):
             raise ValueError("target position has wrong shape. should be (3,)")
         self.target_position = target_position
@@ -63,7 +64,7 @@ class RewardGo2(Reward):
 
         return distance_reward + upright_factor + chest_above_floor + chest_above_feet
 
-    def is_terminal(self) -> bool:
+    def is_terminal(self, timestep) -> bool:
         self.robot.compute_forward_kinematics()
         root_position = self.robot.get_world_position(self.robot.root_name).reshape(3)
         current_square_distance = self.square_distance_to_target(root_position)
@@ -80,7 +81,7 @@ class RewardGo2(Reward):
 
 
         return (self.steps_on_floor > 50 or current_square_distance < self.completed_distance**2 or
-                self.steps_upside_down > 50)
+                self.steps_upside_down > 50 or timestep > self.max_timesteps)
 
     def reset_episode(self):
         self.steps_on_floor = 0

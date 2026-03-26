@@ -13,7 +13,7 @@ from rl import Hyperparameters
 START_TIME = str(int(time.time()))
 
 # Global run settings passed to each child process.
-ROBOT = "go2"
+ROBOT = "cube"
 USE_VIEWER = False
 SAVE_ON_END = True
 
@@ -25,7 +25,7 @@ LOAD_NETWORK_TIME : Optional[str] = None
 LOAD_NETWORK_INDEXED = False
 CONTINUE_TRAINING = False
 
-# run 1 (not actually 1, but keeping track now)
+# run 1 (not actually 1, but keeping track now) go2
 '''value_lrs = [1e-7, 1e-9, 1e-11]
 policy_lrs = [1e-3, 1e-4]
 discount_factors = [0.98]
@@ -34,7 +34,7 @@ value_trace_decays = [0.9, 0.95]
 max_value_grad_norms = [1.0, 5.0]
 value_function_changeouts = [200, 400]'''
 
-# run 2
+# run 2 go2
 '''value_lrs = [1e-3, 1e-5, 1e-7, 1e-9]
 policy_lrs = [1e-3, 1e-4]
 discount_factors = [0.98]
@@ -43,14 +43,44 @@ value_trace_decays = [0.95]
 max_value_grad_norms = [1.0, 2.0, 5.0, 10.0]
 value_function_changeouts = [400]'''
 
-value_lrs = [1e-6, 1e-7, 3e-7, 3e-8]
+# run 3 go2 and cube
+'''value_lrs = [1e-6, 1e-7, 3e-7, 3e-8]
 policy_lrs = [3e-4, 1e-4]
 discount_factors = [0.98]
 policy_trace_decays = [0.95, 0.99]
 value_trace_decays = [0.95, 0.99]
 unified_trace_decays = [0.95, 0.99]
 max_value_grad_norms = [2.0, 5.0, 10.0]
-value_function_changeouts = [400]
+value_function_changeouts = [400]'''
+
+# run 4 (cube)
+'''value_lrs = [1e-2, 1e-3, 1e-5]
+policy_lrs = [1e-2, 1e-3, 1e-5]
+discount_factors = [0.98]
+policy_trace_decays = [0.95, 0.99]
+value_trace_decays = [0.95, 0.99]
+unified_trace_decays = [0.95, 0.99]
+max_value_grad_norms = [2.0, 5.0, 10.0]
+value_function_changeouts = [400]'''
+
+# run 5 (cube)
+'''value_lrs = [1e-1, 1e-2, 1e-3, 1e-7, 1e-9]
+policy_lrs = [1e-1, 1e-2, 1e-3, 1e-7, 1e-9]
+discount_factors = [0.98]
+policy_trace_decays = [0.95]
+value_trace_decays = [0.95]
+unified_trace_decays = [None]
+max_value_grad_norms = [10.0]
+value_function_changeouts = [50, 200]'''
+
+value_lrs = [3e-3]
+policy_lrs = [1e-2]
+discount_factors = [0.98]
+policy_trace_decays = [0.95]
+value_trace_decays = [0.95]
+unified_trace_decays = [0.95, 0.7]
+max_value_grad_norms = [10.0]
+value_function_changeouts = [50]
 
 '''value_lrs = [1e-7]
 policy_lrs = [1e-3]
@@ -75,7 +105,8 @@ baseline_hyperparams = Hyperparameters(
     max_value_grad_norm = 1.0,
     discount_factor_decay = 1,
     value_function_changeout = None,
-    max_episodes=1000
+    max_episodes=1000,
+    episodes_without_improvement=1000
 )
 
 def build_hyperparams_grid():
@@ -206,7 +237,7 @@ def main():
         time.sleep(0.1)
 
     print('shutting down train many')
-    time.sleep(30)
+    time.sleep(1 * len(jobs))
 
     for p in jobs:
         if p.poll() is None:

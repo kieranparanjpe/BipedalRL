@@ -21,3 +21,4 @@ class Hyperparameters:
     discount_factor_decay : Optional[float] = 1
     value_function_changeout : Optional[int] = 500
     max_episodes : int = 1000
+    episodes_without_improvement : int = 200

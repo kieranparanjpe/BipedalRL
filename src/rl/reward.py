@@ -7,15 +7,16 @@ if TYPE_CHECKING:
 
 class Reward(ABC):
 
-    def __init__(self, robot : Robot):
+    def __init__(self, robot : Robot, max_timesteps : int):
         self.robot = robot
+        self.max_timesteps = max_timesteps
 
     @abstractmethod
     def reward(self) -> float:
         raise NotImplemented
 
     @abstractmethod
-    def is_terminal(self) -> bool:
+    def is_terminal(self, timestep : int) -> bool:
         raise NotImplemented
 
     @abstractmethod

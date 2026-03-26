@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import math
+import time
 
 import torch
 import pandas as pd
@@ -59,7 +60,7 @@ class ActorCritic:
 
     def __init__(self, environment : Environment, policy : Policy, value_function : NeuralNetwork,
                  reward : Reward, robot : Robot,
-                 hyperparams : Optional[Hyperparameters] = None,
+                 hyperparams : Hyperparameters,
                  timestep_callback : Optional[Callable[[int], None]] = None):
         self.environment = environment
         self.policy_1 = policy # used for inference
@@ -67,7 +68,7 @@ class ActorCritic:
         self.value_function_2 = NeuralNetwork.from_other(value_function) # used for bootstrapping
         self.reward = reward
         self.robot = robot
-        self.hyperparams = hyperparams if hyperparams is not None else Hyperparameters()
+        self.hyperparams = hyperparams
 
         self.value_eligibility_trace = [torch.zeros_like(p) for p in value_function.parameters()]
         self.policy_eligibility_trace =[torch.zeros_like(p) for p in policy.neural_network.parameters()]
@@ -89,13 +90,14 @@ class ActorCritic:
     def train(self, instance=0):
         with self.environment as environment:
             while environment.is_running() and self.total_episodes < self.hyperparams.max_episodes:
+                start_time = int(time.time())
                 total_reward_per_timestep = self.train_episode(environment)
 
                 self.episode_statistics.append({"episode": self.total_episodes, "total_reward_per_timestep":
                     total_reward_per_timestep})
 
                 print(f"Trained Instance: {instance} | Episode: {self.total_episodes}/{self.hyperparams.max_episodes}"
-                      f" | Latest Reward: {total_reward_per_timestep}")
+                      f" | Latest Reward: {total_reward_per_timestep} | Time Taken {int(time.time()) - start_time}")
 
                 self.total_episodes += 1
 
@@ -136,7 +138,7 @@ class ActorCritic:
             # Get next reward
             reward = torch.tensor(self.reward.reward(), dtype=torch.float32).detach()
             total_reward += reward.item()
-            terminal = self.reward.is_terminal()
+            terminal = self.reward.is_terminal(timesteps)
 
             value_function_current_state, value_function_next_state = self.estimate_value_function(
                 bootstrapping_value_function, current_state, next_state

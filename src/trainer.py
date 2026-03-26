@@ -10,7 +10,8 @@ import torch
 
 from io_controller import IOController
 from robot import Robot
-from rl import ActorCritic, MujocoEnvironment, BetaPolicy, NeuralNetwork, RewardG1, RewardGo2, Policy, Reward, Hyperparameters
+from rl import ActorCritic, MujocoEnvironment, BetaPolicy, NeuralNetwork, RewardG1, RewardGo2, Policy, Reward, \
+    Hyperparameters, RewardCube
 
 
 class Trainer:
@@ -19,7 +20,8 @@ class Trainer:
                  hyperparameters : Optional[Hyperparameters] = None, start_time = 0,
                  load_network_time=None, load_network_instance=0, continue_training=False):
 
-        robot_type_to_scene_file = {'g1' : '../robots/g1/scene_29dof.xml', 'go2': '../robots/go2/scene.xml'}
+        robot_type_to_scene_file = {'g1' : '../robots/g1/scene_29dof.xml', 'go2': '../robots/go2/scene.xml',
+                                    'cube' : '../robots/cube/scene.xml'}
 
         self.robot_type = robot_type
         self.start_time_string = datetime.fromtimestamp(start_time, tz=timezone.utc).strftime("%y_%m_%d_%H_%M_%S")
@@ -31,13 +33,18 @@ class Trainer:
         self.save_on_end = save_on_end
         self.io_controller = io_controller
 
+        self.hyperparams = hyperparameters if hyperparameters is not None else Hyperparameters()
+
         self.model = mujoco.MjModel.from_xml_path(robot_type_to_scene_file[robot_type], None)
         self.data = mujoco.MjData(self.model)
+
 
         if robot_type == 'g1':
             self.robot, self.policy, self.value_function, self.reward = self.init_g1()
         elif robot_type == 'go2':
             self.robot, self.policy, self.value_function, self.reward = self.init_go2()
+        elif robot_type == 'cube':
+            self.robot, self.policy, self.value_function, self.reward = self.init_cube()
         else:
             raise ValueError(f"invalid robot selection {robot_type}")
 
@@ -51,7 +58,7 @@ class Trainer:
             self.value_function,
             self.reward,
             self.robot,
-            hyperparams=hyperparameters,
+            hyperparams=self.hyperparams,
             timestep_callback=self.timestep_callback
         )
 
@@ -68,15 +75,23 @@ class Trainer:
         robot = Robot(self.model, self.data, 'pelvis', 'g1')
         policy = BetaPolicy(NeuralNetwork(layer_dimensions=(107, 256, 256, 58)))
         value_function = NeuralNetwork(layer_dimensions=(107, 128, 64, 1))
-        reward = RewardG1(robot, np.array([10, 0, 0]), "torso_link")
+        reward = RewardG1(robot, np.array([1, 0, 0]), "torso_link")
         return robot, policy, value_function, reward
 
     def init_go2(self) -> tuple[Robot, Policy, NeuralNetwork, Reward]:
         robot = Robot(self.model, self.data, 'base_link', 'go2')
         policy = BetaPolicy(NeuralNetwork(layer_dimensions=(56, 256, 256, 24)))
         value_function = NeuralNetwork(layer_dimensions=(56, 128, 64, 1))
-        reward = RewardGo2(robot, np.array([10, 0, 0]),
+        reward = RewardGo2(robot, np.array([1, 0, 0]),
                                 ['FR_foot', 'FL_foot', 'RR_foot', 'RL_foot'])
+        return robot, policy, value_function, reward
+
+    def init_cube(self) -> tuple[Robot, Policy, NeuralNetwork, Reward]:
+        robot = Robot(self.model, self.data, 'cube', 'cube')
+        policy = BetaPolicy(NeuralNetwork(layer_dimensions=(4, 16, 32, 4)))
+        value_function = NeuralNetwork(layer_dimensions=(4, 16, 32, 1))
+        reward = RewardCube(robot, np.array([1, 0, 0]),
+                            max_steps_without_improvement=self.hyperparams.episodes_without_improvement)
         return robot, policy, value_function, reward
 
     def timestep_callback(self, timestep : int):

@@ -1,5 +1,7 @@
 import os
 import pandas as pd
+from tqdm import tqdm
+
 
 def _mean_head_tail(df: pd.DataFrame, col: str, n: int):
     if col not in df.columns or len(df) == 0:
@@ -17,7 +19,7 @@ def _mean_episode_length_head_tail(timestep_df: pd.DataFrame, n: int):
 
 def summarise(directory, instance=(0, 1), episode_n: int = 40, timestep_n: int = 2000):
     rows = []
-    for i in range(instance[0], instance[1]):
+    for i in tqdm(range(instance[0], instance[1])):
         episodeStats = pd.read_csv(os.path.join(directory, f"episode_data_{i}.csv"))
         mean_reward_start, mean_reward_end = _mean_head_tail(episodeStats, 'total_reward_per_timestep', episode_n)
         reward_end_stability = episodeStats["total_reward_per_timestep"].tail(episode_n).std()
@@ -129,6 +131,6 @@ def summarise(directory, instance=(0, 1), episode_n: int = 40, timestep_n: int =
 
 
 if __name__ == "__main__":
-    directory = "../train_information/go2/instance_26_03_24_18_16_52"
-    summary = summarise(os.path.join(directory, "raw_data"), (0, 32), timestep_n=20000, episode_n=40)
+    directory = "../train_information/cube/instance_26_03_25_07_18_27"
+    summary = summarise(os.path.join(directory, "raw_data"), (0, 2), timestep_n=20000, episode_n=40)
     summary.to_csv(os.path.join(directory, "summary_statistics.csv"))

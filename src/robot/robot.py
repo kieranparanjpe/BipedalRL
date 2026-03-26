@@ -111,7 +111,7 @@ class Robot:
         self.qpos_all_indices = np.array(self.qpos_all_indices)
         self.qvel_all_indices = np.array(self.qvel_all_indices)
         self.ctrl_all_indices = np.array(self.ctrl_all_indices)
-        self.revolute_joint_indices = np.array(self.revolute_joint_indices)
+        self.revolute_joint_indices = np.array(self.revolute_joint_indices, dtype=np.int32)
 
         self.ctrl_range = self.model.actuator_ctrlrange[self.ctrl_all_indices][:,1] / 1
 
@@ -146,13 +146,15 @@ class Robot:
 
     def get_positions_sin_cos(self):
         position = self.get_positions()
-        sin_pos = position.copy()
+        sin_pos = position[self.revolute_joint_indices].copy()
         sin_pos[self.revolute_joint_indices] = np.sin(sin_pos[self.revolute_joint_indices])
 
-        cos_pos = position.copy()
+        cos_pos = position[self.revolute_joint_indices].copy()
         cos_pos[self.revolute_joint_indices] = np.cos(cos_pos[self.revolute_joint_indices])
 
-        return np.concatenate((sin_pos, cos_pos))
+        non_rev_idx = np.setdiff1d(np.arange(position.shape[0]), self.revolute_joint_indices)
+
+        return np.concatenate((position[non_rev_idx], sin_pos, cos_pos))
 
     def get_velocities(self):
         return self.data.qvel[self.qvel_all_indices]

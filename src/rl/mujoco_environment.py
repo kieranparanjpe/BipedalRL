@@ -26,7 +26,8 @@ class MujocoEnvironment(Environment):
         # Example: V key toggles rendering
         if keycode in (ord('v'), ord('V')):
             self.render_enabled = not self.render_enabled
-        self.on_key(keycode)
+        if self.on_key is not None:
+            self.on_key(keycode)
 
     def __enter__(self):
         self._viewer_ctx = (
