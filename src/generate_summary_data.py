@@ -2,127 +2,123 @@ import os
 import pandas as pd
 from tqdm import tqdm
 
+METRIC_COLUMN_MAP = {
+    "abs_td_error": "abs(td error)",
+    "abs_alpha_beta_diff": "mean(abs(alpha-beta))",
+    "policy_entropy": "policy_entropy",
+    "action_mean": "action_mean",
+    "action_std": "action_std",
+    "action_l2_norm": "action_l2_norm",
+    "policy_grad_norm_before_clip": "policy_grad_norm_before_clip",
+    "policy_grad_norm_after_clip": "policy_grad_norm_after_clip",
+    "value_grad_norm_before_clip": "value_grad_norm_before_clip",
+    "value_grad_norm_after_clip": "value_grad_norm_after_clip",
+    "policy_update_norm_before_clip": "policy_update_norm_before_clip",
+    "policy_update_norm_after_clip": "policy_update_norm_after_clip",
+    "value_update_norm_before_clip": "value_update_norm_before_clip",
+    "value_update_norm_after_clip": "value_update_norm_after_clip",
+    "policy_trace_norm_before_clip": "policy_trace_norm_before_clip",
+    "policy_trace_norm_after_clip": "policy_trace_norm_after_clip",
+    "value_trace_norm_before_clip": "value_trace_norm_before_clip",
+    "value_trace_norm_after_clip": "value_trace_norm_after_clip",
+}
+
 
 def _mean_head_tail(df: pd.DataFrame, col: str, n: int):
     if col not in df.columns or len(df) == 0:
         return None, None
     return df[col].head(n).mean(), df[col].tail(n).mean()
 
-def _mean_episode_length_head_tail(timestep_df: pd.DataFrame, n: int):
+
+def _reward_stats(episode_df: pd.DataFrame, episode_n: int):
+    start, end = _mean_head_tail(episode_df, "total_reward_per_timestep", episode_n)
+    stability = None
+    if "total_reward_per_timestep" in episode_df.columns and len(episode_df) > 0:
+        stability = episode_df["total_reward_per_timestep"].tail(episode_n).std()
+    delta = None
+    if start is not None and end is not None:
+        delta = end - start
+    return start, end, delta, stability
+
+
+def _episode_length_stats_from_timestep(timestep_df: pd.DataFrame, episode_n: int):
     if "episode" not in timestep_df.columns or len(timestep_df) == 0:
         return None, None
     episode_lengths = timestep_df.groupby("episode", sort=False).size()
     if len(episode_lengths) == 0:
         return None, None
-    return episode_lengths.head(n).mean(), episode_lengths.tail(n).mean()
+    return float(episode_lengths.head(episode_n).mean()), float(episode_lengths.tail(episode_n).mean())
+
+
+def _episode_length_stats_from_episode(episode_df: pd.DataFrame, episode_n: int):
+    return _mean_head_tail(episode_df, "episode_length", episode_n)
+
+
+def _metric_summary(df: pd.DataFrame, window_n: int, suffix_n: int):
+    summary = {}
+    for metric_name, source_col in METRIC_COLUMN_MAP.items():
+        start, end = _mean_head_tail(df, source_col, window_n)
+        summary[f"mean_{metric_name}_start_{suffix_n}"] = start
+        summary[f"mean_{metric_name}_end_{suffix_n}"] = end
+    return summary
+
+
+def _extract_hparams(episode_df: pd.DataFrame):
+    out = {}
+    for col in episode_df.columns:
+        if col.startswith("H_"):
+            out[col] = episode_df[col].iloc[0]
+    return out
+
+
+def _build_base_row(instance_i: int, episode_df: pd.DataFrame, episode_n: int):
+    mean_reward_start, mean_reward_end, reward_delta, reward_end_stability = _reward_stats(episode_df, episode_n)
+    return {
+        "instance": instance_i,
+        f"mean_reward_start_{episode_n}": mean_reward_start,
+        f"mean_reward_end_{episode_n}": mean_reward_end,
+        "reward_delta": reward_delta,
+        f"reward_end_stability_{episode_n}_std": reward_end_stability,
+    }
+
+
+def _summarise_instance_with_timestep(directory: str, instance_i: int, episode_n: int, timestep_n: int):
+    episode_df = pd.read_csv(os.path.join(directory, f"episode_data_{instance_i}.csv"))
+    timestep_df = pd.read_csv(os.path.join(directory, f"timestep_data_{instance_i}.csv"))
+
+    row = _build_base_row(instance_i, episode_df, episode_n)
+    ep_len_start, ep_len_end = _episode_length_stats_from_timestep(timestep_df, episode_n)
+    row[f"mean_episode_length_start_{episode_n}"] = ep_len_start
+    row[f"mean_episode_length_end_{episode_n}"] = ep_len_end
+    row |= _metric_summary(timestep_df, timestep_n, timestep_n)
+    row |= _extract_hparams(episode_df)
+    return row
+
+
+def _summarise_instance_episode_only(directory: str, instance_i: int, episode_n: int):
+    episode_df = pd.read_csv(os.path.join(directory, f"episode_data_{instance_i}.csv"))
+
+    row = _build_base_row(instance_i, episode_df, episode_n)
+    ep_len_start, ep_len_end = _episode_length_stats_from_episode(episode_df, episode_n)
+    row[f"mean_episode_length_start_{episode_n}"] = ep_len_start
+    row[f"mean_episode_length_end_{episode_n}"] = ep_len_end
+    row |= _metric_summary(episode_df, episode_n, episode_n)
+    row |= _extract_hparams(episode_df)
+    return row
 
 
 def summarise(directory, instance=(0, 1), episode_n: int = 40, timestep_n: int = 2000):
     rows = []
     for i in tqdm(range(instance[0], instance[1])):
-        episodeStats = pd.read_csv(os.path.join(directory, f"episode_data_{i}.csv"))
-        mean_reward_start, mean_reward_end = _mean_head_tail(episodeStats, 'total_reward_per_timestep', episode_n)
-        reward_end_stability = episodeStats["total_reward_per_timestep"].tail(episode_n).std()
+        episode_path = os.path.join(directory, f"episode_data_{i}.csv")
+        if not os.path.exists(episode_path):
+            continue
 
-        timestepStats = pd.read_csv(os.path.join(directory, f"timestep_data_{i}.csv"))
-        mean_episode_length_start, mean_episode_length_end = _mean_episode_length_head_tail(timestepStats, episode_n)
-
-        mean_abs_td_error_start, mean_abs_td_error_end = _mean_head_tail(timestepStats, "abs(td error)", timestep_n)
-        mean_alpha_beta_diff_start, mean_alpha_beta_diff_end = _mean_head_tail(timestepStats, "mean(abs(alpha-beta))", episode_n)
-
-        policy_entropy_start, policy_entropy_end = _mean_head_tail(timestepStats, "policy_entropy", timestep_n)
-        action_mean_start, action_mean_end = _mean_head_tail(timestepStats, "action_mean", timestep_n)
-        action_std_start, action_std_end = _mean_head_tail(timestepStats, "action_std", timestep_n)
-        action_l2_start, action_l2_end = _mean_head_tail(timestepStats, "action_l2_norm", timestep_n)
-
-        policy_grad_before_start, policy_grad_before_end = _mean_head_tail(
-            timestepStats, "policy_grad_norm_before_clip", timestep_n
-        )
-        policy_grad_after_start, policy_grad_after_end = _mean_head_tail(
-            timestepStats, "policy_grad_norm_after_clip", timestep_n
-        )
-        value_grad_before_start, value_grad_before_end = _mean_head_tail(
-            timestepStats, "value_grad_norm_before_clip", timestep_n
-        )
-        value_grad_after_start, value_grad_after_end = _mean_head_tail(
-            timestepStats, "value_grad_norm_after_clip", timestep_n
-        )
-        policy_update_before_start, policy_update_before_end = _mean_head_tail(
-            timestepStats, "policy_update_norm_before_clip", timestep_n
-        )
-        policy_update_after_start, policy_update_after_end = _mean_head_tail(
-            timestepStats, "policy_update_norm_after_clip", timestep_n
-        )
-        value_update_before_start, value_update_before_end = _mean_head_tail(
-            timestepStats, "value_update_norm_before_clip", timestep_n
-        )
-        value_update_after_start, value_update_after_end = _mean_head_tail(
-            timestepStats, "value_update_norm_after_clip", timestep_n
-        )
-
-        policy_trace_before_start, policy_trace_before_end = _mean_head_tail(
-            timestepStats, "policy_trace_norm_before_clip", timestep_n
-        )
-        policy_trace_after_start, policy_trace_after_end = _mean_head_tail(
-            timestepStats, "policy_trace_norm_after_clip", timestep_n
-        )
-        value_trace_before_start, value_trace_before_end = _mean_head_tail(
-            timestepStats, "value_trace_norm_before_clip", timestep_n
-        )
-        value_trace_after_start, value_trace_after_end = _mean_head_tail(
-            timestepStats, "value_trace_norm_after_clip", timestep_n
-        )
-
-        row = {
-            "instance": i,
-            f"mean_reward_start_{episode_n}": mean_reward_start,
-            f"mean_reward_end_{episode_n}": mean_reward_end,
-            "reward_delta": mean_reward_end - mean_reward_start,
-            f"reward_end_stability_{episode_n}_std": reward_end_stability,
-            f"mean_episode_length_start_{episode_n}": mean_episode_length_start,
-            f"mean_episode_length_end_{episode_n}": mean_episode_length_end,
-            f"mean_abs_td_error_start_{timestep_n}": mean_abs_td_error_start,
-            f"mean_abs_td_error_end_{timestep_n}": mean_abs_td_error_end,
-            f"mean_abs_alpha_beta_diff_start_{timestep_n}": mean_alpha_beta_diff_start,
-            f"mean_abs_alpha_beta_diff_end_{timestep_n}": mean_alpha_beta_diff_end,
-            f"mean_policy_entropy_start_{timestep_n}": policy_entropy_start,
-            f"mean_policy_entropy_end_{timestep_n}": policy_entropy_end,
-            f"mean_action_mean_start_{timestep_n}": action_mean_start,
-            f"mean_action_mean_end_{timestep_n}": action_mean_end,
-            f"mean_action_std_start_{timestep_n}": action_std_start,
-            f"mean_action_std_end_{timestep_n}": action_std_end,
-            f"mean_action_l2_norm_start_{timestep_n}": action_l2_start,
-            f"mean_action_l2_norm_end_{timestep_n}": action_l2_end,
-            f"mean_policy_grad_norm_before_clip_start_{timestep_n}": policy_grad_before_start,
-            f"mean_policy_grad_norm_before_clip_end_{timestep_n}": policy_grad_before_end,
-            f"mean_policy_grad_norm_after_clip_start_{timestep_n}": policy_grad_after_start,
-            f"mean_policy_grad_norm_after_clip_end_{timestep_n}": policy_grad_after_end,
-            f"mean_value_grad_norm_before_clip_start_{timestep_n}": value_grad_before_start,
-            f"mean_value_grad_norm_before_clip_end_{timestep_n}": value_grad_before_end,
-            f"mean_value_grad_norm_after_clip_start_{timestep_n}": value_grad_after_start,
-            f"mean_value_grad_norm_after_clip_end_{timestep_n}": value_grad_after_end,
-            f"mean_policy_update_norm_before_clip_start_{timestep_n}": policy_update_before_start,
-            f"mean_policy_update_norm_before_clip_end_{timestep_n}": policy_update_before_end,
-            f"mean_policy_update_norm_after_clip_start_{timestep_n}": policy_update_after_start,
-            f"mean_policy_update_norm_after_clip_end_{timestep_n}": policy_update_after_end,
-            f"mean_value_update_norm_before_clip_start_{timestep_n}": value_update_before_start,
-            f"mean_value_update_norm_before_clip_end_{timestep_n}": value_update_before_end,
-            f"mean_value_update_norm_after_clip_start_{timestep_n}": value_update_after_start,
-            f"mean_value_update_norm_after_clip_end_{timestep_n}": value_update_after_end,
-            f"mean_policy_trace_norm_before_clip_start_{timestep_n}": policy_trace_before_start,
-            f"mean_policy_trace_norm_before_clip_end_{timestep_n}": policy_trace_before_end,
-            f"mean_policy_trace_norm_after_clip_start_{timestep_n}": policy_trace_after_start,
-            f"mean_policy_trace_norm_after_clip_end_{timestep_n}": policy_trace_after_end,
-            f"mean_value_trace_norm_before_clip_start_{timestep_n}": value_trace_before_start,
-            f"mean_value_trace_norm_before_clip_end_{timestep_n}": value_trace_before_end,
-            f"mean_value_trace_norm_after_clip_start_{timestep_n}": value_trace_after_start,
-            f"mean_value_trace_norm_after_clip_end_{timestep_n}": value_trace_after_end,
-        }
-
-        # include hyperparams from first row if present
-        for col in episodeStats.columns:
-            if col.startswith("H_"):
-                row[col] = episodeStats[col].iloc[0]
+        timestep_path = os.path.join(directory, f"timestep_data_{i}.csv")
+        if os.path.exists(timestep_path):
+            row = _summarise_instance_with_timestep(directory, i, episode_n, timestep_n)
+        else:
+            row = _summarise_instance_episode_only(directory, i, episode_n)
 
         rows.append(row)
 

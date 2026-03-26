@@ -61,7 +61,8 @@ class ActorCritic:
     def __init__(self, environment : Environment, policy : Policy, value_function : NeuralNetwork,
                  reward : Reward, robot : Robot,
                  hyperparams : Hyperparameters,
-                 timestep_callback : Optional[Callable[[int], None]] = None):
+                 timestep_callback : Optional[Callable[[int], None]] = None,
+                 generate_timestep_statistics = False):
         self.environment = environment
         self.policy_1 = policy # used for inference
         self.value_function_1 = value_function # used for inference
@@ -72,6 +73,8 @@ class ActorCritic:
 
         self.value_eligibility_trace = [torch.zeros_like(p) for p in value_function.parameters()]
         self.policy_eligibility_trace =[torch.zeros_like(p) for p in policy.neural_network.parameters()]
+
+        self.generate_timestep_statistics = generate_timestep_statistics
 
         self.episode_statistics = []
         self.timestep_statistics = []
@@ -91,18 +94,19 @@ class ActorCritic:
         with self.environment as environment:
             while environment.is_running() and self.total_episodes < self.hyperparams.max_episodes:
                 start_time = int(time.time())
-                total_reward_per_timestep = self.train_episode(environment)
+                timestep_summary = self.train_episode(environment)
 
-                self.episode_statistics.append({"episode": self.total_episodes, "total_reward_per_timestep":
-                    total_reward_per_timestep})
+                episode_stats = {"episode": self.total_episodes, "global_timestep": self.total_timesteps} | timestep_summary
+
+                self.episode_statistics.append(episode_stats)
 
                 print(f"Trained Instance: {instance} | Episode: {self.total_episodes}/{self.hyperparams.max_episodes}"
-                      f" | Latest Reward: {total_reward_per_timestep} | Time Taken {int(time.time()) - start_time}")
+                      f" | Latest Avg Reward: {episode_stats['total_reward_per_timestep']} | Time Taken {int(time.time()) - start_time}")
 
                 self.total_episodes += 1
 
 
-    def train_episode(self, environment):
+    def train_episode(self, environment) -> dict[str, float]:
         environment.reset()
         self.reset_eligibility_traces()
         self.reward.reset_episode()
@@ -113,6 +117,9 @@ class ActorCritic:
         decay = 1
         total_reward = 0
         timesteps = 0
+
+        timestep_stats_sum = None
+
         while environment.is_running():
             if self.timestep_callback is not None:
                 self.timestep_callback(self.total_timesteps)
@@ -160,8 +167,7 @@ class ActorCritic:
             decay *= self.hyperparams.discount_factor_decay if self.hyperparams.discount_factor_decay is not None \
                 else self.hyperparams.discount_factor
 
-
-            self.timestep_statistics.append(
+            timestep_stats = (
                 {
                     "episode": self.total_episodes,
                     "timestep": self.total_timesteps,
@@ -174,13 +180,25 @@ class ActorCritic:
                 | gradient_stats
                 | update_stats
                 | trace_stats
-                | self.policy_1.get_statistics())
+                | self.policy_1.get_statistics()
+            )
+
+            if self.generate_timestep_statistics:
+                self.timestep_statistics.append(timestep_stats)
+
+            if timestep_stats_sum is None:
+                timestep_stats_sum = timestep_stats
+            else:
+                timestep_stats_sum = {k: timestep_stats_sum[k] + timestep_stats[k] for k in timestep_stats_sum.keys() & timestep_stats.keys()}
+
             self.total_timesteps += 1
             timesteps += 1
             if terminal:
                 break
 
-        return total_reward / timesteps
+        timestep_summary = {k: timestep_stats_sum[k] / timesteps for k in timestep_stats_sum.keys()} | {
+            'episode_length': timesteps, 'total_reward_per_timestep': total_reward / timesteps}
+        return timestep_summary
 
     def update_weights(self, td_error: Tensor) -> dict[str, float]:
         with torch.no_grad():
@@ -309,7 +327,6 @@ class ActorCritic:
 
     def load_stats(self, load_file_directory, instance=0, continuation=False):
         episode_statistics = pd.read_csv(os.path.join(load_file_directory, f"episode_data_{instance}.csv"))
-        timestep_statistics = pd.read_csv(os.path.join(load_file_directory, f"timestep_data_{instance}.csv"))
 
         # Check loaded hyperparams match current hyperparams (using first row H_* values).
         h_cols = [c for c in episode_statistics.columns if c.startswith("H_")]
@@ -335,36 +352,41 @@ class ActorCritic:
 
         # Drop old H_* so save_stats can add one clean set for all rows.
         episode_statistics = episode_statistics.drop(columns=h_cols, errors="ignore")
-        timestep_statistics = timestep_statistics.drop(columns=h_cols, errors="ignore")
 
         # continue from timestep where we left off
         self.total_episodes = int(episode_statistics['episode'].iloc[-1]) + 1
-        self.total_timesteps = int(timestep_statistics['timestep'].iloc[-1]) + 1
+        self.total_timesteps = int(episode_statistics['global_timestep'].iloc[-1]) + 1
 
         self.preloaded_episode_statistics = episode_statistics
-        self.preloaded_timestep_statistics = timestep_statistics
+
+        if self.generate_timestep_statistics:
+            timestep_statistics = pd.read_csv(os.path.join(load_file_directory, f"timestep_data_{instance}.csv"))
+            timestep_statistics = timestep_statistics.drop(columns=h_cols, errors="ignore")
+            self.preloaded_timestep_statistics = timestep_statistics
+
+
 
 
 
     def save_stats(self, save_file_directory, instance=0):
         print(f"Saving raw data for instance: {instance}")
 
+        def save_data(array, preloaded, name):
+            stats = pd.DataFrame(array)
 
-        episodeStats = pd.DataFrame(self.episode_statistics)
-        timestepStats = pd.DataFrame(self.timestep_statistics)
+            if preloaded is not None:
+                stats = pd.concat([preloaded, stats], ignore_index=True)
 
-        if self.preloaded_episode_statistics is not None:
-            episodeStats = pd.concat([self.preloaded_episode_statistics, episodeStats], ignore_index=True)
-        if self.preloaded_timestep_statistics is not None:
-            timestepStats = pd.concat([self.preloaded_timestep_statistics, timestepStats], ignore_index=True)
+            if len(stats) > 0:
+                hparams = self._hyperparams_columns(len(stats))
+                stats = pd.concat([hparams, stats], axis=1)
+                stats.to_csv(os.path.join(save_file_directory, f"{name}_data_{instance}.csv"))
 
-        if len(episodeStats) > 0:
-            episode_hparams = self._hyperparams_columns(len(episodeStats))
-            episodeStats = pd.concat([episode_hparams, episodeStats], axis=1)
-            episodeStats.to_csv(os.path.join(save_file_directory, f"episode_data_{instance}.csv"))
+        save_data(self.episode_statistics, self.preloaded_episode_statistics,'episode')
 
-        if len(timestepStats) > 0:
-            timestep_hparams = self._hyperparams_columns(len(timestepStats))
-            timestepStats = pd.concat([timestep_hparams, timestepStats], axis=1)
-            timestepStats.to_csv(os.path.join(save_file_directory, f"timestep_data_{instance}.csv"))
+        if self.generate_timestep_statistics:
+            save_data(self.timestep_statistics, self.preloaded_timestep_statistics, 'timestep')
+
+
+
 

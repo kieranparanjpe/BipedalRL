@@ -73,8 +73,8 @@ unified_trace_decays = [None]
 max_value_grad_norms = [10.0]
 value_function_changeouts = [50, 200]'''
 
-value_lrs = [3e-3]
-policy_lrs = [1e-2]
+value_lrs = [1e-2]
+policy_lrs = [1e-3]
 discount_factors = [0.98]
 policy_trace_decays = [0.95]
 value_trace_decays = [0.95]

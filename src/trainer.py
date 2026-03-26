@@ -141,7 +141,10 @@ class Trainer:
         destination = os.path.join(self.root_out_path(self.start_time_string), "rl")
         rl_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "rl"))
         if not os.path.exists(destination):
-            shutil.copytree(rl_folder, destination)
+            try:
+                shutil.copytree(rl_folder, destination)
+            except Exception:
+                pass
 
     def network_paths(self, time_, instance):
         saved_networks_path = os.path.join(self.root_out_path(time_), "saved_networks")
